@@ -1,0 +1,81 @@
+---
+- name: Add Ansible_Playground placeholder in bashrc for future modification
+  hosts: all
+  become: true
+
+  vars:
+    # Define the placeholder content
+    placeholder_content: |
+ export LS_OPTIONS='--color=auto'
+ eval "$(dircolors)"
+ alias ls='ls $LS_OPTIONS'
+ alias ll='ls $LS_OPTIONS -ltrah'
+ alias l='ls $LS_OPTIONS -lA'
+
+ alias grep='grep --color=auto'
+ alias fgrep='fgrep --color=auto'
+ alias egrep='egrep --color=auto'
+
+ alias dmesg='dmesg -T'
+ alias tailf='tail -f'
+
+ alias cronl='crontab -lu'
+ alias crone='crontab -eu'
+
+ alias cef='cd /etc/fail2ban'
+ alias ceaa='cd /etc/apache2/sites-available'
+ alias ceae='cd /etc/apache2/sites-enabled'
+
+ alias cvwh='cd /var/www/html'
+ alias cvl='cd /var/log'
+ alias cvla='cd /var/log/apache2'
+
+ alias dps='docker ps'
+ alias dcf='docker compose -f'
+ alias dic='docker inspect'
+ alias dlc='echo "docker logs CONT_ID -f"'
+ alias dex='echo "docker exec -t CONT_ID COMMAND"'
+
+ alias dil='docker images'
+ alias diprune='docker image prune -a'
+ alias dsprune='docker system prune --volumes'
+
+    # Define the line after which to add the placeholder
+    # This example adds it after the last line that sets PATH
+    target_line_pattern: "^# Some more alias to avoid making mistakes:"
+
+  tasks:
+    - name: Get list of users with home directories
+      ansible.builtin.shell: "getent passwd | grep '/home/' | grep -E '/bin/(ba)?sh$'"
+      register: shell_users
+      changed_when: false
+      failed_when: false
+
+    - name: Add placeholder block after specific line in bashrc
+      ansible.builtin.blockinfile:
+        path: "/home/{{ item.split(':')[0] }}/.bashrc"
+        insertbefore: "{{ target_line_pattern }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK"
+        block: "{{ placeholder_content }}"
+        state: present
+        create: false
+      loop: "{{ shell_users.stdout_lines }}"
+      when: item.split(':')[0] != 'root'
+
+    - name: insert empty line before the marker
+      lineinfile:
+        dest: "/home/{{ item.split(':')[0] }}/.bashrc"
+        insertbefore: '^# BEGIN ANSIBLE MANAGED BLOCK$'
+        line: ' '
+      loop: "{{ shell_users.stdout_lines }}"
+      when: item.split(':')[0] != 'root'
+
+    - name: insert empty line after the marker
+      lineinfile:
+        dest: "/home/{{ item.split(':')[0] }}/.bashrc"
+        insertafter: '^# END ANSIBLE MANAGED BLOCK$'
+        line: ' '
+      loop: "{{ shell_users.stdout_lines }}"
+      when: item.split(':')[0] != 'root'
+      
+      
