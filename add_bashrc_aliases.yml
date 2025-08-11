@@ -1,5 +1,5 @@
 ---
-- name: Add Ansible_Playground placeholder in bashrc for future modification
+- name: Add Aliases in bashrc
   hosts: all
   become: true
 
@@ -39,7 +39,10 @@
  alias dil='docker images'
  alias diprune='docker image prune -a'
  alias dsprune='docker system prune --volumes'
-
+ 
+ alias gc='git clone'
+ alias gp='git push'
+ 
     # Define the line after which to add the placeholder
     # This example adds it after the last line that sets PATH
     target_line_pattern: "^# Some more alias to avoid making mistakes:"
