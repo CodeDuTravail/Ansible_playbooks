@@ -1,0 +1,15 @@
+# templates/db.reverse.j2
+$TTL    604800
+@       IN      SOA     ns1.{{ domain_name }}. admin.{{ domain_name }}. (
+                          1         ; Serial
+                     604800         ; Refresh
+                      86400         ; Retry
+                    2419200         ; Expire
+                     604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns1.{{ domain_name }}.
+
+; PTR Records
+10      IN      PTR     www.{{ domain_name }}.
+20      IN      PTR     mail.{{ domain_name }}.
+{{ dns_listen_address.split('.')[-1] }}      IN      PTR     ns1.{{ domain_name }}.

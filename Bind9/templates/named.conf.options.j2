@@ -1,0 +1,23 @@
+options {
+        directory "/var/cache/bind";
+
+        // Listen on local interfaces only
+        listen-on { 127.0.0.1; {{ dns_listen_address }}; };
+        
+        // Allow queries from local network only
+        allow-query { localhost; 192.168.1.0/24; };
+
+        // Disable recursion for security (only answer for zones we are authoritative for)
+        // Change to yes if you want to use this as a caching DNS server
+        recursion yes;
+
+        // Forwarders for external domain resolution
+        forwarders {
+{% for forwarder in dns_forwarders %}
+                {{ forwarder }};
+{% endfor %}
+        };
+
+        dnssec-validation auto;
+        auth-nxdomain no;    # conform to RFC1035
+};
