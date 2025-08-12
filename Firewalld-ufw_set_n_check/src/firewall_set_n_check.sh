@@ -13,7 +13,7 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 # Configuration
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly DATE=$(date +%Y_%m_%d)
-readonly DEST_MAIL="admin@example.com"
+readonly DEST_MAIL="YOUR_MAIL@DOMAIN.COM"
 readonly FIREWALL_CONF_PATH="/home/admin/conf_backup/ports_conf"
 readonly FIREWALL_CONF_FILE="$FIREWALL_CONF_PATH/firewall_ports.conf"
 readonly FIREWALL_CONF_CHECK="$FIREWALL_CONF_PATH/firewall_ports.check"
