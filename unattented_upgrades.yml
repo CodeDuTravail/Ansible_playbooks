@@ -1,9 +1,9 @@
 ---
 - name: Unattended Upgrades (Debian 12)
-  hosts: all
+  hosts: your_hosts_group
   become: yes
   vars_files:
-    - v_all.yml
+    - your_vars_file.yml
   vars:
     ansible_become_pass: "{{ all_become_pass }}"
 
