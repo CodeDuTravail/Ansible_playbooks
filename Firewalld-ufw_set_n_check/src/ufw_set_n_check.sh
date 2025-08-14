@@ -1,10 +1,10 @@
 #!/bin/bash
 #
-# /home/pi/scripts/ufw_set_n_check_ex.sh
+# /home/mercy/_src/scripts/ufw_set_n_check.sh
 # Purpose: Monitor open ports and configure UFW rules accordingly
 # Optimized version with better error handling and crontab management
 #
-# Crontab entry: 0 1 * * * ~/$USER/scripts/ufw_set_n_check_ex.sh
+# Crontab entry: 0 1 * * * /home/mercy/_src/scripts/ufw_set_n_check.sh
 #
 # -------------------------------------------------------------------------------
 
@@ -22,7 +22,7 @@ readonly UFW_CONF_CHECK="$UFW_CONF_PATH/ufw_ports.check"
 readonly UFW_CONF_DIFF="$UFW_CONF_PATH/ufw_ports.log"
 readonly UFW_LAST_LOG="$UFW_CONF_PATH/ufw_ports_last.log"
 readonly CRON_COMMENT="# UFW PORTS CONF CHECK"
-readonly CRON_JOB="0 1 * * * $(realpath "$0" 2>/dev/null || echo "$0")"
+readonly CRON_JOB="*/5 * * * * $(realpath "$0" 2>/dev/null || echo "$0")"
 
 # Logging function
 log_message() {
@@ -234,6 +234,7 @@ EOF
             send_notification "WARNING: Port configuration changed" "$diff_content"
         else
             log_message "No significant port changes detected"
+			cat $UFW_LAST_LOG
         fi
     elif [[ ! -f "$UFW_LAST_LOG" ]]; then
         log_message "First run comparison, no notification sent"
@@ -242,6 +243,7 @@ EOF
     fi
     
     log_message "UFW port monitoring script completed"
+	cat $UFW_LAST_LOG
 }
 
 # Execute main function

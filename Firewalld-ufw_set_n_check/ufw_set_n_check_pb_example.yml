@@ -1,153 +1,26 @@
----
-- name: Deploy Firewall Port Monitoring Scripts
+- name: UFW Set N Check All
   hosts: your_hosts_group
   become: yes
   vars_files:
-    - your_vars_file.yml
+  - your_vars_file.yml
   vars:
-    ansible_become_pass: "{{ hosts_become_pass }}"
-    # Script destinations based on OS
-    debian_script_path: "/usr/local/bin/ufw_set_n_check"
-    rhel_script_path: "/usr/local/bin/firewall_set_n_check.sh"
-    
+    ansible_become_pass: "{{ all_become_pass }}"
+    dest_filepath: "{{ scripts_path }}"
   tasks:
-    - name: Gather OS facts
-      setup:
-        gather_subset: 
-          - "!all"
-          - "!min" 
-          - "distribution"
-          - "os_family"
-      
-    - name: Debug OS information
-      debug:
-        msg: "Detected OS: {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_os_family }})"
-    
-    # Debian/Ubuntu tasks
-    - name: Install UFW firewall (Debian/Ubuntu)
-      apt: 
-        name: ufw 
-        update_cache: yes 
-        state: latest
-      when: ansible_os_family == "Debian"
-      
-    - name: Install required packages for email notifications (Debian/Ubuntu)
-      apt:
-        name: 
-          - msmtp
-          - msmtp-mta
-        state: present
-      when: ansible_os_family == "Debian"
-      ignore_errors: yes
-      
-    - name: Copy UFW monitoring script (Debian/Ubuntu)
-      template: 
-        src: "src/ufw_set_n_check.sh"
-        dest: "{{ debian_script_path }}"
-        mode: '0755'
-        owner: root
-        group: root
-      when: ansible_os_family == "Debian"
-      
-    - name: Run UFW monitoring script (Debian/Ubuntu)
-      command: "{{ debian_script_path }}"
-      register: ufw_script_result
-      when: ansible_os_family == "Debian"
-      
-    - name: Enable UFW (Debian/Ubuntu)
+    - name: Install UFW firewall
+      apt: name=ufw update_cache=yes state=latest
+    - name: Check directory exists
+      file:
+        path: "{{ scripts_path }}"
+        recurse: true
+        state: directory
+    - name: Copy UFW script to remote instance
+      copy:
+        src: "{{ all_src_path }}/scripts/ufw_set_n_check.sh"
+        dest: "{{ dest_filepath }}/ufw_set_n_check.sh"
+        mode: 0755
+    - name: Run UFW script to remote instance
+      ansible.builtin.script: "{{ all_src_path }}/scripts/ufw_set_n_check.sh"
+    - name: Enable UFW
       community.general.ufw:
         state: enabled
-        policy: deny
-        direction: incoming
-      when: ansible_os_family == "Debian"
-      
-    # RHEL/CentOS/Fedora tasks
-    - name: Install firewalld (RHEL/CentOS/Fedora)
-      yum:
-        name: firewalld
-        state: present
-      when: ansible_os_family == "RedHat"
-      
-    - name: Install required packages for email notifications (RHEL/CentOS/Fedora)
-      yum:
-        name:
-          - msmtp
-        state: present
-      when: ansible_os_family == "RedHat"
-      ignore_errors: yes
-      
-    - name: Start and enable firewalld service (RHEL/CentOS/Fedora)
-      systemd:
-        name: firewalld
-        state: started
-        enabled: yes
-      when: ansible_os_family == "RedHat"
-      
-    - name: Copy firewall monitoring script (RHEL/CentOS/Fedora)
-      template: 
-        src: "src/firewall_set_n_check.sh"
-        dest: "{{ rhel_script_path }}"
-        mode: '0755'
-        owner: root
-        group: root
-      when: ansible_os_family == "RedHat"
-      
-    - name: Run firewall monitoring script (RHEL/CentOS/Fedora)
-      command: "{{ rhel_script_path }}"
-      register: firewall_script_result
-      when: ansible_os_family == "RedHat"
-      
-    # Common tasks for all systems
-    - name: Verify script execution results
-      debug:
-        msg: "Script execution completed successfully"
-      when: (ansible_os_family == "Debian" and ufw_script_result is succeeded) or 
-            (ansible_os_family == "RedHat" and firewall_script_result is succeeded)
-            
-    - name: Display script output (Debian/Ubuntu)
-      debug:
-        var: ufw_script_result.stdout_lines
-      when: ansible_os_family == "Debian" and ufw_script_result is defined
-      
-    - name: Display script output (RHEL/CentOS/Fedora)
-      debug:
-        var: firewall_script_result.stdout_lines
-      when: ansible_os_family == "RedHat" and firewall_script_result is defined
-      
-    - name: Verify firewall status (Debian/Ubuntu)
-      community.general.ufw:
-        state: enabled
-      check_mode: yes
-      register: ufw_status
-      when: ansible_os_family == "Debian"
-      
-    - name: Verify firewall status (RHEL/CentOS/Fedora)
-      command: firewall-cmd --state
-      register: firewalld_status
-      when: ansible_os_family == "RedHat"
-      failed_when: false
-      
-    - name: Display final firewall status
-      debug:
-        msg: |
-          Firewall deployment completed successfully:
-          {% if ansible_os_family == "Debian" %}
-          - UFW is {{ 'enabled' if ufw_status is not failed else 'disabled' }}
-          - Script location: {{ debian_script_path }}
-          {% elif ansible_os_family == "RedHat" %}
-          - Firewalld is {{ firewalld_status.stdout if firewalld_status.rc == 0 else 'unknown' }}
-          - Script location: {{ rhel_script_path }}
-          {% endif %}
-          
-  handlers:
-    - name: restart ufw
-      systemd:
-        name: ufw
-        state: restarted
-      when: ansible_os_family == "Debian"
-      
-    - name: restart firewalld
-      systemd:
-        name: firewalld
-        state: restarted
-      when: ansible_os_family == "RedHat"

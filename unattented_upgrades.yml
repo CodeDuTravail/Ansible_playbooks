@@ -1,0 +1,154 @@
+---
+- name: Unattended Upgrades (Debian 12)
+  hosts: all
+  become: yes
+  vars_files:
+    - v_all.yml
+  vars:
+    ansible_become_pass: "{{ all_become_pass }}"
+
+    # Email configuration for notifications
+    unattended_upgrades_email: "{{ mail }}"
+    # Set to true to enable automatic reboot after kernel updates
+    unattended_upgrades_auto_reboot: false
+    # Time for automatic reboot (if enabled)
+    unattended_upgrades_auto_reboot_time: "02:00"
+    
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      
+    - name: Install unattended-upgrades package
+      apt:
+        name: unattended-upgrades
+        state: present
+        
+
+        
+    - name: Configure unattended-upgrades main configuration
+      template:
+        src: "{{ all_templates_path }}/50unattended-upgrades.j2"
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify: test unattended upgrades
+
+    - name: Copy auto-upgrades configuration template
+      copy:
+        src: /usr/share/unattended-upgrades/20auto-upgrades
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+
+    - name: Configure auto-upgrades settings
+      copy:
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::Download-Upgradeable-Packages "1";
+          APT::Periodic::AutocleanInterval "30";
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+      notify: test unattended upgrades
+
+    - name: Create systemd override directory for apt-daily.timer
+      file:
+        path: /etc/systemd/system/apt-daily.timer.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure apt-daily.timer schedule (package download at 02:00)
+      copy:
+        content: |
+          [Timer]
+          OnCalendar=
+          OnCalendar=04:00
+          RandomizedDelaySec=0
+        dest: /etc/systemd/system/apt-daily.timer.d/override.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart apt-daily.timer
+
+    - name: Create systemd override directory for apt-daily-upgrade.timer
+      file:
+        path: /etc/systemd/system/apt-daily-upgrade.timer.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure apt-daily-upgrade.timer schedule (package upgrade at 03:00)
+      copy:
+        content: |
+          [Timer]
+          OnCalendar=
+          OnCalendar=05:00
+          RandomizedDelaySec=0
+        dest: /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart apt-daily-upgrade.timer
+
+    - name: Enable and start apt-daily.timer
+      systemd:
+        name: apt-daily.timer
+        enabled: yes
+        state: started
+
+    - name: Enable and start apt-daily-upgrade.timer
+      systemd:
+        name: apt-daily-upgrade.timer
+        enabled: yes
+        state: started
+
+    - name: Check timer status
+      command: systemctl list-timers apt-daily*
+      register: timer_status
+      changed_when: false
+
+    - name: Display timer status
+      debug:
+        var: timer_status.stdout_lines
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart apt-daily.timer
+      systemd:
+        name: apt-daily.timer
+        state: restarted
+
+    - name: restart apt-daily-upgrade.timer
+      systemd:
+        name: apt-daily-upgrade.timer
+        state: restarted
+
+    - name: test unattended upgrades
+      command: unattended-upgrades --debug --dry-run
+      register: dry_run_result
+      changed_when: false
+      failed_when: false
+
+    - name: display dry run results
+      debug:
+        var: dry_run_result.stdout_lines
+      when: dry_run_result is defined
