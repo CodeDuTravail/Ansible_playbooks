@@ -1,0 +1,501 @@
+---
+#===============================================================================
+# BASHRC COMPLETE BUILDER PLAYBOOK
+#===============================================================================
+# 
+# DESCRIPTION:
+#   This playbook builds complete .bashrc files with custom configurations
+#   and different colored prompts for root vs non-root users.
+#
+# REQUIRED TAGS (SAFETY FEATURE):
+#   NO TAGS             : DEFAULT - Apply to regular users only (safe default)
+#   --tags "users"      : Apply to regular users only (excludes root)
+#   --tags "root-only"  : Apply to root user only (/root/.bashrc) 
+#   --tags "all-users"  : Apply to both regular users AND root
+#   --tags "only-user"  : Apply to one specific user (requires -e target_user=username)
+#
+# SPECIAL VARIABLES:
+#   target_user         : Username for cherry-picking specific user (use with only-user tag)
+#                        Example: -e target_user=john
+#
+# USAGE EXAMPLES:
+#   # Default behavior (no tags = users only):
+#   ansible-playbook pb_bashrc_builder.yml -i inventory
+#
+#   # For regular users explicitly:
+#   ansible-playbook pb_bashrc_builder.yml --tags "users" -i inventory
+#
+#   # For root only (use with caution):
+#   ansible-playbook pb_bashrc_builder.yml --tags "root-only" -i inventory
+#
+#   # For all users (use with extreme caution):
+#   ansible-playbook pb_bashrc_builder.yml --tags "all-users" -i inventory
+#
+#   # For testing - one specific user only:
+#   ansible-playbook pb_bashrc_builder.yml --tags "only-user" -e target_user=joao -i inventory
+#   ansible-playbook pb_bashrc_builder.yml --tags "only-user" -e target_user=root -i inventory
+#
+# REQUIREMENTS:
+#   - Optional source file: _src/config/bashrc_alias.src (for additional aliases)
+#   - Variables file: v_all.yml (may be vault encrypted)
+#   - Proper inventory configuration
+#   - SSH access to target hosts
+#
+# SAFETY NOTES:
+#   - ALWAYS test on non-production systems first
+#   - This will OVERWRITE existing .bashrc files
+#   - Backup .bashrc files before running if concerned
+#   - Root modifications can affect system stability
+#
+#===============================================================================
+
+- name: Build complete .bashrc with custom prompts for root and users
+  hosts: your_hosts_group
+  become: true
+  vars_files:
+    - your_vaulfile.yml
+  vars:
+    ansible_become_pass: "{{ your_hosts_group_become_pass | default(omit) }}"
+    
+    # Common bashrc header (part 1)
+    bashrc_common_header: |
+      # ~/.bashrc: executed by bash(1) for non-login shells.
+      # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
+      # for examples
+      # If not running interactively, don't do anything
+      case $- in
+          *i*) ;;
+            *) return;;
+      esac
+      # SHELL OPTIONS #---------------------------------------------------------------------
+      shopt -s checkwinsize
+      shopt -s histappend          # Append to history file, don't overwrite
+      shopt -s cmdhist             # Save multi-line commands in one history entry
+      shopt -s cdspell             # Correct minor spelling errors in cd commands
+      shopt -s dirspell            # Correct minor spelling errors in directory names
+      shopt -s autocd              # cd into directories by just typing their name (bash 4+)
+      # HISTORY OPTIONS #---------------------------------------------------------------------
+      export EDITOR=vi
+      export HISTCONTROL=ignoreboth:erasedups  # Ignore duplicates and lines starting with space
+      export HISTTIMEFORMAT='%F %T # '
+      export HISTFILESIZE=10000    # Increased from 5000
+      export HISTSIZE=5000         # Number of commands to remember in current session
+      export HISTIGNORE="ls:ll:la:pwd:clear:history:exit:cd:cd ..:cd~"  # Don't save common commands
+      # Full history sync across multiple terminals
+      PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+
+    # Root user prompt configuration (yellow/green - part 2A)
+    bashrc_root_prompt: |
+      # CUSTOM INVITE ROOT USER # BEGIN #---------------------------------------------------------------------
+      # set variable identifying the chroot you work in (used in the prompt below)
+      if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+          debian_chroot=$(cat /etc/debian_chroot)
+      fi
+      # set a fancy prompt (non-color, unless we know we "want" color)
+      case "$TERM" in
+          xterm-color|*-256color) color_prompt=yes;;
+      esac
+      # uncomment for a colored prompt, if the terminal has the capability; turned
+      # off by default to not distract the user: the focus in a terminal window
+      # should be on the output of commands, not on the prompt
+      force_color_prompt=yes
+      if [ -n "$force_color_prompt" ]; then
+          if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+              # We have color support; assume it's compliant with Ecma-48
+              # (ISO/IEC-6429). (Lack of such support is extremely rare, and such
+              # a case would tend to support setf rather than setaf.)
+              color_prompt=yes
+          else
+              color_prompt=
+          fi
+      fi
+      if [ "$color_prompt" = yes ]; then
+          PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h\[\033[00m\]:\[\033[01;32m\]\w \$\[\033[00m\] '
+      else
+          PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+      fi
+      unset color_prompt force_color_prompt
+      # If this is an xterm set the title to user@host:dir
+      case "$TERM" in
+      xterm*|rxvt*)
+          PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+          ;;
+      *)
+          ;;
+      esac
+      # CUSTOM INVITE ROOT USER # END #---------------------------------------------------------------------
+
+    # Non-root user prompt configuration (green/blue - part 2B)
+    bashrc_user_prompt: |
+      # CUSTOM INVITE NON-ROOT USER # BEGIN #---------------------------------------------------------------------
+      # set variable identifying the chroot you work in (used in the prompt below)
+      if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+          debian_chroot=$(cat /etc/debian_chroot)
+      fi
+      # set a fancy prompt (non-color, unless we know we "want" color)
+      case "$TERM" in
+          xterm-color|*-256color) color_prompt=yes;;
+      esac
+      # uncomment for a colored prompt, if the terminal has the capability; turned
+      # off by default to not distract the user: the focus in a terminal window
+      # should be on the output of commands, not on the prompt
+      force_color_prompt=yes
+      if [ -n "$force_color_prompt" ]; then
+          if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+              # We have color support; assume it's compliant with Ecma-48
+              # (ISO/IEC-6429). (Lack of such support is extremely rare, and such
+              # a case would tend to support setf rather than setaf.)
+              color_prompt=yes
+          else
+              color_prompt=
+          fi
+      fi
+      if [ "$color_prompt" = yes ]; then
+          PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w \$\[\033[00m\] '
+      else
+          PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+      fi
+      unset color_prompt force_color_prompt
+      # If this is an xterm set the title to user@host:dir
+      case "$TERM" in
+      xterm*|rxvt*)
+          PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+          ;;
+      *)
+          ;;
+      esac
+      # CUSTOM INVITE NON-ROOT USER # END #---------------------------------------------------------------------
+
+    # Common bashrc footer (part 3) - additional settings and completion
+    bashrc_common_footer: |
+      
+      # Additional useful settings
+      export LESS='-R -i'          # Better less behavior (colors, case-insensitive search)
+      
+      # enable color support of ls and also add handy aliases
+      if [ -x /usr/bin/dircolors ]; then
+          test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+          alias dir='dir --color=auto'
+          alias vdir='vdir --color=auto'
+      fi
+      
+      # colored GCC warnings and errors
+      #export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+      
+      # Add an "alert" alias for long running commands.  Use like so:
+      #   sleep 10; alert
+      alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+      
+      # Alias definitions.
+      # You may want to put all your additions into a separate file like
+      # ~/.bash_aliases, instead of adding them here directly.
+      # See /usr/share/doc/bash-doc/examples in the bash-doc package.
+      
+      if [ -f ~/.bash_aliases ]; then
+          . ~/.bash_aliases
+      fi
+      
+      # enable programmable completion features (you don't need to enable
+      # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
+      # sources /etc/bash.bashrc).
+      if ! shopt -oq posix; then
+        if [ -f /usr/share/bash-completion/bash_completion ]; then
+          . /usr/share/bash-completion/bash_completion
+        elif [ -f /etc/bash_completion ]; then
+          . /etc/bash_completion
+        fi
+      fi
+
+    # Custom bash aliases (part 4) - your specific aliases
+    bashrc_custom_aliases: |
+      # BASH ALIASES # BEGIN #---------------------------------------------------------------------
+      export LS_OPTIONS='--color=auto'
+      eval "$(dircolors)"
+      alias ls='ls $LS_OPTIONS'
+      alias ll='ls $LS_OPTIONS -lah'
+      alias lt='ls $LS_OPTIONS -ltrah'
+      alias grep='grep --color=auto'
+      alias fgrep='fgrep --color=auto'
+      alias egrep='egrep --color=auto'
+      alias hh='history'
+      alias dmesg='dmesg -T'
+      alias tailf='tail -f'
+      alias cronl='crontab -lu'
+      alias crone='crontab -eu'
+      alias ..='cd ..'
+      alias ...='cd ../..'
+      alias ....='cd ../../..'
+      alias cef='cd /etc/fail2ban'
+      alias cefa='cd /etc/fail2ban/action.d'
+      alias ceff='cd /etc/fail2ban/filter.d'
+      alias cefj='cd /etc/fail2ban/jail.d'
+      alias ceaa='cd /etc/apache2/sites-available'
+      alias ceae='cd /etc/apache2/sites-enabled'
+      alias cvwh='cd /var/www/html'
+      alias cvl='cd /var/log'
+      alias cvla='cd /var/log/apache2'
+      alias dps='docker ps'
+      alias dcf='docker compose -f'
+      alias dic='docker inspect'
+      alias dlc='echo "docker logs CONT_ID -f"'
+      alias dex='echo "docker exec -t CONT_ID COMMAND"'
+      alias dil='docker images'
+      alias dvl='docker volume ls'
+      alias diprune='docker image prune -a'
+      alias dsprune='docker system prune --volumes'
+      alias dcpl='docker-credential-pass list'
+      alias dcph='pass show docker-credential-helpers/docker-pass-initialized-check'
+      # BASH ALIASES # END #---------------------------------------------------------------------
+    
+  tasks:
+    # Default behavior: if no tags specified, run users-only tasks
+    - name: Set default tag behavior (users-only when no tags specified)
+      ansible.builtin.set_fact:
+        run_default_users: true
+      when: ansible_run_tags == ['all']
+      tags:
+        - always
+
+    # Validation for only-user tag
+    - name: Validate target_user variable is provided for only-user tag
+      ansible.builtin.fail:
+        msg: |
+          ERROR: 'only-user' tag requires target_user variable.
+          Usage: ansible-playbook playbook.yml --tags "only-user" -e target_user=username
+          Example: ansible-playbook playbook.yml --tags "only-user" -e target_user=john
+      when: 
+        - "'only-user' in ansible_run_tags"
+        - "target_user is not defined or target_user == ''"
+      tags:
+        - only-user
+        - always
+
+    - name: Check if target user exists and has valid shell
+      ansible.builtin.shell: getent passwd {{ target_user }}
+      register: target_user_check
+      changed_when: false
+      failed_when: target_user_check.rc != 0
+      when: 
+        - "'only-user' in ansible_run_tags"
+        - "target_user is defined and target_user != ''"
+      tags:
+        - only-user
+        - always
+
+    - name: Get list of users with home directories
+      ansible.builtin.shell: getent passwd | grep '/home/' | grep -E '/bin/(ba)?sh$'
+      register: shell_users
+      changed_when: false
+      failed_when: false
+      tags:
+        - users
+        - all-users
+        - only-user
+        - always
+      when: >
+        'users' in ansible_run_tags or 
+        'all-users' in ansible_run_tags or
+        'only-user' in ansible_run_tags or
+        (ansible_run_tags == ['all'] and run_default_users is defined)
+
+    # Backup existing .bashrc files
+    - name: Backup existing .bashrc files for regular users
+      ansible.builtin.copy:
+        src: "/home/{{ item.split(':')[0] }}/.bashrc"
+        dest: "/home/{{ item.split(':')[0] }}/.bashrc.backup.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        force: no
+      loop: "{{ shell_users.stdout_lines | default([]) }}"
+      when: 
+        - "'only-user' not in ansible_run_tags"
+        - "item.split(':')[0] != 'root'"
+        - >
+          'users' in ansible_run_tags or 
+          'all-users' in ansible_run_tags or
+          (ansible_run_tags == ['all'] and run_default_users is defined)
+      ignore_errors: yes
+      tags:
+        - users
+        - all-users
+        - always
+
+    - name: Backup existing .bashrc file for specific user
+      ansible.builtin.copy:
+        src: "{{ '/root/.bashrc' if target_user == 'root' else '/home/' + target_user + '/.bashrc' }}"
+        dest: "{{ '/root/.bashrc.backup.' + ansible_date_time.epoch if target_user == 'root' else '/home/' + target_user + '/.bashrc.backup.' + ansible_date_time.epoch }}"
+        remote_src: yes
+        force: no
+      when: 
+        - "'only-user' in ansible_run_tags"
+        - "target_user is defined"
+      ignore_errors: yes
+      tags:
+        - only-user
+
+    - name: Backup existing root .bashrc
+      ansible.builtin.copy:
+        src: /root/.bashrc
+        dest: "/root/.bashrc.backup.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        force: no
+      when: >
+        'root-only' in ansible_run_tags or 
+        'all-users' in ansible_run_tags
+      ignore_errors: yes
+      tags:
+        - root-only
+        - all-users
+
+    # Build complete .bashrc for specific user (only-user tag)
+    - name: Build complete .bashrc for specific user
+      ansible.builtin.copy:
+        dest: "{{ '/root/.bashrc' if target_user == 'root' else '/home/' + target_user + '/.bashrc' }}"
+        content: |
+          {{ bashrc_common_header }}
+          
+          {{ bashrc_root_prompt if target_user == 'root' else bashrc_user_prompt }}
+          
+          {{ bashrc_common_footer }}
+          
+          {{ bashrc_custom_aliases }}
+          {% if lookup('ansible.builtin.file', '_src/config/bashrc_alias.src', errors='ignore') %}
+          
+          # ADDITIONAL CUSTOM ALIASES FROM EXTERNAL SOURCE
+          {{ lookup('ansible.builtin.file', '_src/config/bashrc_alias.src') }}
+          {% endif %}
+        owner: "{{ target_user }}"
+        mode: '0644'
+      when: 
+        - "'only-user' in ansible_run_tags"
+        - "target_user is defined"
+      tags:
+        - only-user
+
+    # Build complete .bashrc for regular users (non-root)
+    - name: Build complete .bashrc for regular users
+      ansible.builtin.copy:
+        dest: "/home/{{ item.split(':')[0] }}/.bashrc"
+        content: |
+          {{ bashrc_common_header }}
+          
+          {{ bashrc_user_prompt }}
+          
+          {{ bashrc_common_footer }}
+          
+          {{ bashrc_custom_aliases }}
+          {% if lookup('ansible.builtin.file', '_src/config/bashrc_alias.src', errors='ignore') %}
+          
+          # ADDITIONAL CUSTOM ALIASES FROM EXTERNAL SOURCE
+          {{ lookup('ansible.builtin.file', '_src/config/bashrc_alias.src') }}
+          {% endif %}
+        owner: "{{ item.split(':')[0] }}"
+        mode: '0644'
+      loop: "{{ shell_users.stdout_lines | default([]) }}"
+      when: 
+        - "'only-user' not in ansible_run_tags"
+        - "item.split(':')[0] != 'root'"
+        - >
+          'users' in ansible_run_tags or 
+          'all-users' in ansible_run_tags or
+          (ansible_run_tags == ['all'] and run_default_users is defined)
+      tags:
+        - users
+        - all-users
+        - always
+
+    # Build complete .bashrc for root user
+    - name: Check if root user exists
+      ansible.builtin.user:
+        name: root
+      register: root_user_check
+      when: >
+        'root-only' in ansible_run_tags or 
+        'all-users' in ansible_run_tags
+      tags:
+        - root-only
+        - all-users
+
+    - name: Build complete .bashrc for root user
+      ansible.builtin.copy:
+        dest: /root/.bashrc
+        content: |
+          {{ bashrc_common_header }}
+          
+          {{ bashrc_root_prompt }}
+          
+          {{ bashrc_common_footer }}
+          
+          {{ bashrc_custom_aliases }}
+          {% if lookup('ansible.builtin.file', '_src/config/bashrc_alias.src', errors='ignore') %}
+          
+          # ADDITIONAL CUSTOM ALIASES FROM EXTERNAL SOURCE
+          {{ lookup('ansible.builtin.file', '_src/config/bashrc_alias.src') }}
+          {% endif %}
+        owner: root
+        group: root
+        mode: '0644'
+      when: >
+        'root-only' in ansible_run_tags or 
+        'all-users' in ansible_run_tags
+      tags:
+        - root-only
+        - all-users
+
+    # Verification tasks
+    - name: Verify .bashrc syntax for regular users
+      ansible.builtin.shell: bash -n "/home/{{ item.split(':')[0] }}/.bashrc"
+      loop: "{{ shell_users.stdout_lines | default([]) }}"
+      when: 
+        - "'only-user' not in ansible_run_tags"
+        - "item.split(':')[0] != 'root'"
+        - >
+          'users' in ansible_run_tags or 
+          'all-users' in ansible_run_tags or
+          (ansible_run_tags == ['all'] and run_default_users is defined)
+      register: bashrc_syntax_check
+      changed_when: false
+      tags:
+        - users
+        - all-users
+        - always
+
+    - name: Verify .bashrc syntax for root
+      ansible.builtin.shell: bash -n /root/.bashrc
+      when: >
+        'root-only' in ansible_run_tags or 
+        'all-users' in ansible_run_tags
+      register: root_bashrc_syntax_check
+      changed_when: false
+      tags:
+        - root-only
+        - all-users
+
+    - name: Verify .bashrc syntax for specific user
+      ansible.builtin.shell: bash -n "{{ '/root/.bashrc' if target_user == 'root' else '/home/' + target_user + '/.bashrc' }}"
+      when: 
+        - "'only-user' in ansible_run_tags"
+        - "target_user is defined"
+      register: specific_bashrc_syntax_check
+      changed_when: false
+      tags:
+        - only-user
+
+    # Success message
+    - name: Display success message
+      ansible.builtin.debug:
+        msg: |
+          ✅ .bashrc files have been successfully built and deployed!
+          
+          🔍 Key Features Deployed:
+          • Enhanced shell options (histappend, cdspell, autocd, etc.)
+          • Improved history management with cross-terminal sync
+          • Different colored prompts for root (yellow/green) vs users (green/blue)
+          • Standard Debian aliases and completion support
+          • Custom aliases from _src/config/bashrc_alias.src (if available)
+          
+          📁 Backup files created with timestamp: {{ ansible_date_time.epoch }}
+          
+          🔄 Users need to run 'source ~/.bashrc' or start a new terminal session
+          to activate the new configuration.
+      tags:
+        - always

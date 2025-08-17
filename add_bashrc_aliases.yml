@@ -2,8 +2,10 @@
 - name: Add Aliases in bashrc
   hosts: your_hosts_group
   become: true
-
+  vars_files:
+    - your_vaulfile.yml
   vars:
+    ansible_become_pass: "{{ your_hosts_group_become_pass | default(omit) }}"
     # Define the placeholder content
     placeholder_content: |
  export LS_OPTIONS='--color=auto'
