@@ -1,10 +1,10 @@
 - name: UFW Set N Check All
   hosts: your_hosts_group
-  become: yes
+  become: true
   vars_files:
-  - your_vars_file.yml
+    - your_vars_file.yml
   vars:
-    ansible_become_pass: "{{ all_become_pass }}"
+    ansible_become_pass: "{{ your_hosts_group_become_pass }}"
     dest_filepath: "{{ scripts_path }}"
   tasks:
     - name: Install UFW firewall

@@ -5,10 +5,10 @@
   vars_files:
     - your_vars_file.yml
   vars:
-    ansible_become_pass: "{{ all_become_pass }}"
+    ansible_become_pass: "{{ your_hosts_group_become_pass }}"
 
     # Email configuration for notifications
-    unattended_upgrades_email: "{{ mail }}"
+    unattended_upgrades_email: "{{ your_mail }}"
     # Set to true to enable automatic reboot after kernel updates
     unattended_upgrades_auto_reboot: false
     # Time for automatic reboot (if enabled)
