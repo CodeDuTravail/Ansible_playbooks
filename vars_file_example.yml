@@ -1,0 +1,7 @@
+all_become_pass: YOU_PASSWORD
+
+# Local paths
+local_src_path: "/home/hans_zible/ansible/_src"
+local_src_templates_path: "/home/hans_zible/ansible/_src/templates"
+local_src_scripts_path: "/home/hans_zible/ansible/_src/scripts"
+local_src_config_path: "/home/hans_zible/ansible/_src/config"
