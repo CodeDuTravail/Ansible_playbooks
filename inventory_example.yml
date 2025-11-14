@@ -1,0 +1,47 @@
+---
+all:
+  children:
+    laps:
+      hosts:
+        hostname_0:
+          ansible_host: hostname_0.fqdn
+          ansible_connection: ssh
+          ansible_user: hans_zible
+          ansible_ssh_private_key_file: /home/hans_zible/.ssh/id_ed25519_hostname_0
+          ansible_port: 2214
+    servers:
+      hosts:
+        hostname_1:
+          ansible_host: hostname_1.fqdn
+          ansible_connection: ssh
+          ansible_user: hans_zible
+          ansible_ssh_private_key_file: /home/hans_zible/.ssh/id_ed25519_hostname_1
+          ansible_port: 22
+    pies:
+      hosts:
+        hostname_2:
+          ansible_host: hostname_2.fqdn
+          ansible_connection: ssh
+          ansible_user: hans_zible
+          ansible_ssh_private_key_file: /home/hans_zible/.ssh/id_ed25519_hostname_2
+          ansible_port: 22
+        hostname_3:
+          ansible_host: hostname_3.fqdn
+          ansible_connection: ssh
+          ansible_user: hans_zible
+          ansible_ssh_private_key_file: /home/hans_zible/.ssh/id_ed25519_hostname_3
+          ansible_port: 22
+    nas:
+      hosts:
+        hostname_4:
+          ansible_host: hostname_4.fqdn
+          ansible_connection: ssh
+          ansible_user: hans_zible
+          ansible_ssh_private_key_file: /home/hans_zible/.ssh/id_ed25519_hostname_4
+          ansible_port: 22
+        hostname_5:
+          ansible_host: hostname_5.fqdn
+          ansible_connection: ssh
+          ansible_user: hans_zible
+          ansible_ssh_private_key_file: /home/hans_zible/.ssh/id_ed25519_hostname_5
+          ansible_port: 22
