@@ -1,0 +1,156 @@
+---
+- name: Collect user information from servers
+  hosts: all
+  gather_facts: yes
+  become: yes
+  
+  tasks:
+    - name: Get all users from /etc/passwd
+      shell: "getent passwd | awk -F: '{print $1,$3,$6,$7}'"
+      register: users_list
+      changed_when: false
+      tags:
+        - always
+
+    - name: Get locked users from /etc/shadow
+      shell: "getent shadow | awk -F: '{if ($2 ~ /^!/) print $1}'"
+      register: locked_users
+      changed_when: false
+      failed_when: false
+      tags:
+        - always
+
+    - name: Check PermitRootLogin setting in sshd_config
+      shell: "grep -i 'PermitRootLogin' /etc/ssh/sshd_config | head -1 || echo 'not found'"
+      register: permit_root_login
+      changed_when: false
+      failed_when: false
+      tags:
+        - always
+
+    - name: Build user records (all users)
+      set_fact:
+        user_records: "{{ user_records | default([]) + [user_info] }}"
+      loop: "{{ users_list.stdout_lines }}"
+      vars:
+        user_parts: "{{ item.split() }}"
+        username: "{{ user_parts[0] }}"
+        uid: "{{ user_parts[1] }}"
+        home_dir: "{{ user_parts[2] }}"
+        login_shell: "{{ user_parts[3] }}"
+        is_locked: "{{ 'locked' if username in locked_users.stdout_lines else 'active' }}"
+        is_root: "{{ username == 'root' }}"
+        ssh_access: "{{ permit_root_login.stdout if is_root else 'N/A' }}"
+        has_home: "{{ 'yes' if home_dir != '' and home_dir != '/nonexistent' else 'no' }}"
+        user_info: 
+          hostname: "{{ inventory_hostname }}"
+          user: "{{ username }}"
+          login_shell: "{{ login_shell }}"
+          home_directory: "{{ has_home }}"
+          status: "{{ is_locked }}"
+          ssh_root_login: "{{ ssh_access if is_root else 'N/A' }}"
+      tags:
+        - all_users
+
+    - name: Build user records (root only)
+      set_fact:
+        user_records: "{{ user_records | default([]) + [user_info] }}"
+      loop: "{{ users_list.stdout_lines }}"
+      when: item.split()[0] == 'root'
+      vars:
+        user_parts: "{{ item.split() }}"
+        username: "{{ user_parts[0] }}"
+        uid: "{{ user_parts[1] }}"
+        home_dir: "{{ user_parts[2] }}"
+        login_shell: "{{ user_parts[3] }}"
+        is_locked: "{{ 'locked' if username in locked_users.stdout_lines else 'active' }}"
+        ssh_access: "{{ permit_root_login.stdout }}"
+        has_home: "{{ 'yes' if home_dir != '' and home_dir != '/nonexistent' else 'no' }}"
+        user_info: 
+          hostname: "{{ inventory_hostname }}"
+          user: "{{ username }}"
+          login_shell: "{{ login_shell }}"
+          home_directory: "{{ has_home }}"
+          status: "{{ is_locked }}"
+          ssh_root_login: "{{ ssh_access }}"
+      tags:
+        - only_root
+
+    - name: Save results to localhost (machine running playbook)
+      copy:
+        content: "{{ user_records | to_json }}"
+        dest: "./temp_users_{{ inventory_hostname }}.json"
+      delegate_to: localhost
+      become: no
+      run_once: false
+      tags:
+        - always
+
+- name: Generate CSV report
+  hosts: all
+  gather_facts: no
+  run_once: true
+  tags:
+    - always
+  
+  tasks:
+    - name: Find all JSON files
+      find:
+        paths: .
+        patterns: "temp_users_*.json"
+      register: json_files
+      delegate_to: localhost
+      tags:
+        - always
+
+    - name: Read all JSON files
+      slurp:
+        src: "{{ item.path }}"
+      loop: "{{ json_files.files }}"
+      register: json_contents
+      delegate_to: localhost
+      tags:
+        - always
+
+    - name: Combine all user records
+      set_fact:
+        all_users: "{{ all_users | default([]) + (item.content | b64decode | from_json) }}"
+      loop: "{{ json_contents.results }}"
+      delegate_to: localhost
+      tags:
+        - always
+
+    - name: Generate CSV content
+      set_fact:
+        csv_content: |
+          hostname,user,login shell,home directory,status,ssh root login
+          {% for user in all_users %}
+          {{ user.hostname }},{{ user.user }},{{ user.login_shell }},{{ user.home_directory }},{{ user.status }},{{ user.ssh_root_login }}
+          {% endfor %}
+      delegate_to: localhost
+      tags:
+        - always
+
+    - name: Write CSV file
+      copy:
+        content: "{{ csv_content }}"
+        dest: "./user_audit_report.csv"
+      delegate_to: localhost
+      tags:
+        - always
+
+    - name: Clean up temporary JSON files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ json_files.files }}"
+      delegate_to: localhost
+      tags:
+        - always
+
+    - name: Display success message
+      debug:
+        msg: "CSV report generated: user_audit_report.csv"
+      delegate_to: localhost
+      tags:
+        - always
